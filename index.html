@@ -52,6 +52,7 @@ input:focus,select:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,1
 .deleted-info{font-size:12px;color:#bbb;margin-top:6px;padding-top:6px;border-top:0.5px solid #f0f0ee}
 .show-deleted-row{text-align:center;margin-bottom:12px}
 .show-deleted-btn{font-size:12px;color:#aaa;background:none;border:none;cursor:pointer;text-decoration:underline}
+.member-hint{font-size:12px;color:#1D9E75;margin:-8px 0 10px;min-height:18px}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
@@ -72,7 +73,7 @@ input:focus,select:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,1
     </div>
     <div id="user-login-form">
       <label>会員番号</label>
-      <input type="text" id="login-id" placeholder="例：1001" inputmode="numeric">
+      <input type="text" id="login-id" placeholder="例：0001" inputmode="numeric">
       <div style="text-align:right"><button class="btn btn-primary" onclick="loginUser()">確認する</button></div>
       <div id="login-err" class="err"></div>
     </div>
@@ -116,7 +117,8 @@ input:focus,select:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,1
   <div id="admin-new" style="display:none">
     <div class="card">
       <label>会員番号</label>
-      <input type="text" id="new-member" placeholder="例：1001" inputmode="numeric">
+      <div class="member-hint" id="member-hint"></div>
+      <input type="text" id="new-member" placeholder="読み込み中...">
       <label>お名前</label>
       <input type="text" id="new-name" placeholder="例：山田 太郎">
       <label>券種</label>
@@ -178,16 +180,29 @@ async function apiPost(data){
   return res.json();
 }
 
-function daysLeft(expiry){ return Math.ceil((new Date(expiry) - new Date()) / (1000*60*60*24)); }
-function formatDate(d){
-  if(!d) return '';
-  const dt = new Date(d);
-  return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+// 日本時間フォーマット
+function toJST(isoStr){
+  if(!isoStr) return null;
+  const d = new Date(isoStr);
+  if(isNaN(d)) return null;
+  return new Date(d.getTime() + 9 * 60 * 60 * 1000);
 }
-function formatDateTime(d){
+function formatDate(isoStr){
+  const d = toJST(isoStr);
   if(!d) return '';
-  const dt = new Date(d);
-  return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+  return `${d.getUTCFullYear()}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+function formatDateTime(isoStr){
+  // Apps Script側で整形済みの文字列がそのまま入る場合も考慮
+  if(!isoStr) return '';
+  if(isoStr.includes(' ') && !isoStr.includes('T')) return isoStr; // 既に整形済み
+  const d = toJST(isoStr);
+  if(!d) return isoStr;
+  return `${d.getUTCFullYear()}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+}
+
+function daysLeft(expiry){
+  return Math.ceil((new Date(expiry) - new Date()) / (1000*60*60*24));
 }
 function isDeleted(t){ return t.deleted === 'deleted'; }
 function statusOf(t){
@@ -227,8 +242,7 @@ async function loginUser(){
   document.getElementById('user-member-block').innerHTML = '';
   try {
     const all = await apiGet();
-    // 削除済みを除いて表示
-    const tickets = all.filter(t => String(t.member) === String(id) && !isDeleted(t));
+    const tickets = all.filter(t => String(t.member) === String(id).padStart(4,'0') && !isDeleted(t));
     if(!tickets.length){
       show('s-login');
       document.getElementById('login-err').textContent = '該当する回数券が見つかりません';
@@ -240,7 +254,7 @@ async function loginUser(){
         <div class="member-icon">${initials(name)}</div>
         <div>
           <div class="member-name">${name}</div>
-          <div class="member-no">会員番号：${id}</div>
+          <div class="member-no">会員番号：${String(id).padStart(4,'0')}</div>
         </div>
       </div>`;
     renderUserCards(tickets);
@@ -281,6 +295,23 @@ function adminTab(tab){
     document.getElementById('tab-'+t).classList.toggle('active', t === tab);
   });
   if(tab === 'list') renderAdminList();
+  if(tab === 'new')  loadNextMember();
+}
+
+async function loadNextMember(){
+  const hint = document.getElementById('member-hint');
+  const input = document.getElementById('new-member');
+  hint.textContent = '次の会員番号を取得中...';
+  input.value = '';
+  try {
+    const res = await apiPost({ action: 'nextMember' });
+    input.value = res.member;
+    hint.textContent = `次の会員番号：${res.member}（変更可）`;
+  } catch(e){
+    hint.textContent = '';
+    input.value = '';
+    input.placeholder = '例：0001';
+  }
 }
 
 async function renderAdminList(){
@@ -318,7 +349,6 @@ async function renderAdminList(){
       </div>`;
     }).join('');
 
-    // 削除済み件数の表示切替ボタン
     if(deleted.length > 0){
       html += `<div class="show-deleted-row">
         <button class="show-deleted-btn" onclick="toggleDeleted()">
@@ -370,7 +400,7 @@ async function issueTicket(){
     document.getElementById('new-member').value = '';
     document.getElementById('new-name').value   = '';
     errEl.textContent = '';
-    alert(`発行しました。\n${name} 様\n${total}回券　有効期限：${formatDate(expiry)}`);
+    alert(`発行しました。\n${name} 様\n会員番号：${member}\n${total}回券　有効期限：${formatDate(expiry)}`);
     adminTab('list');
   } catch(e){
     errEl.textContent = '通信エラーが発生しました。';
