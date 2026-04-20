@@ -15,6 +15,7 @@ html,body{min-height:100%;background:#f5f5f3;font-family:-apple-system,BlinkMacS
 .screen{display:none}
 .screen.active{display:block}
 .card{background:#fff;border:0.5px solid #e0e0e0;border-radius:12px;padding:1rem 1.25rem;margin-bottom:12px}
+.card.deleted{background:#fafafa;border-color:#e8e8e8;opacity:0.75}
 .btn{display:inline-flex;align-items:center;padding:8px 20px;border:0.5px solid #ccc;border-radius:8px;background:#fff;color:#1a1a1a;font-size:14px;cursor:pointer;transition:background 0.12s}
 .btn:hover{background:#f0f0ee}
 .btn-primary{background:#1D9E75;color:#fff;border-color:#1D9E75}
@@ -33,6 +34,7 @@ input:focus,select:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,1
 .badge-active{background:#E1F5EE;color:#0F6E56}
 .badge-expired{background:#FCEBEB;color:#A32D2D}
 .badge-used{background:#f0f0ee;color:#666}
+.badge-deleted{background:#f0f0ee;color:#999}
 .dot-row{display:flex;gap:7px;margin:12px 0;flex-wrap:wrap}
 .dot{width:34px;height:34px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;background:#f5f5f3;color:#aaa}
 .dot.used{background:#1D9E75;border-color:#1D9E75;color:#fff}
@@ -47,6 +49,9 @@ input:focus,select:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,1
 .err{color:#A32D2D;font-size:13px;margin-top:2px;min-height:18px}
 .loading{text-align:center;padding:2rem;color:#888;font-size:14px}
 .spinner{display:inline-block;width:18px;height:18px;border:2px solid #ddd;border-top-color:#1D9E75;border-radius:50%;animation:spin 0.7s linear infinite;margin-right:6px;vertical-align:middle}
+.deleted-info{font-size:12px;color:#bbb;margin-top:6px;padding-top:6px;border-top:0.5px solid #f0f0ee}
+.show-deleted-row{text-align:center;margin-bottom:12px}
+.show-deleted-btn{font-size:12px;color:#aaa;background:none;border:none;cursor:pointer;text-decoration:underline}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
@@ -140,6 +145,7 @@ input:focus,select:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,1
 <script>
 const API = 'https://script.google.com/macros/s/AKfycbxs9BHXlC73c3SzX0xeC5xqrSLcaSqGfFPFY-TcNtmZFMJ_NM8cAm0V7LZKFFgFdYrtVA/exec';
 const ADMIN_PW_KEY = 'hiro_bjj_admin_pw';
+let showDeleted = false;
 
 function getAdminPw(){ return localStorage.getItem(ADMIN_PW_KEY) || 'sendagi2026'; }
 
@@ -174,10 +180,18 @@ async function apiPost(data){
 
 function daysLeft(expiry){ return Math.ceil((new Date(expiry) - new Date()) / (1000*60*60*24)); }
 function formatDate(d){
+  if(!d) return '';
   const dt = new Date(d);
   return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
 }
+function formatDateTime(d){
+  if(!d) return '';
+  const dt = new Date(d);
+  return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+}
+function isDeleted(t){ return t.deleted === 'deleted'; }
 function statusOf(t){
+  if(isDeleted(t)) return 'deleted';
   if(new Date(t.expiry) < new Date()) return 'expired';
   if(Number(t.used) >= Number(t.total)) return 'used';
   return 'active';
@@ -185,6 +199,7 @@ function statusOf(t){
 function badgeHTML(st){
   if(st==='active')  return '<span class="badge badge-active">有効</span>';
   if(st==='expired') return '<span class="badge badge-expired">期限切れ</span>';
+  if(st==='deleted') return '<span class="badge badge-deleted">削除済み</span>';
   return '<span class="badge badge-used">使い切り</span>';
 }
 function renderDots(total, used, status){
@@ -197,7 +212,6 @@ function renderDots(total, used, status){
   return html + '</div>';
 }
 function loadingHTML(){ return '<div class="loading"><span class="spinner"></span>読み込み中...</div>'; }
-
 function initials(name){
   const parts = name.trim().split(/\s+/);
   if(parts.length >= 2) return parts[0][0] + parts[1][0];
@@ -213,13 +227,13 @@ async function loginUser(){
   document.getElementById('user-member-block').innerHTML = '';
   try {
     const all = await apiGet();
-    const tickets = all.filter(t => String(t.member) === String(id));
+    // 削除済みを除いて表示
+    const tickets = all.filter(t => String(t.member) === String(id) && !isDeleted(t));
     if(!tickets.length){
       show('s-login');
       document.getElementById('login-err').textContent = '該当する回数券が見つかりません';
       return;
     }
-    // 名前・会員番号ブロック
     const name = tickets[0].name;
     document.getElementById('user-member-block').innerHTML = `
       <div class="member-block">
@@ -238,6 +252,7 @@ async function loginUser(){
 function loginAdmin(){
   const pw = document.getElementById('admin-pw').value;
   if(pw !== getAdminPw()){ document.getElementById('admin-err').textContent = 'パスワードが違います'; return; }
+  showDeleted = false;
   adminTab('list');
   show('s-admin');
 }
@@ -272,29 +287,55 @@ async function renderAdminList(){
   const el = document.getElementById('admin-list');
   el.innerHTML = loadingHTML();
   try {
-    const tickets = await apiGet();
-    if(!tickets.length){ el.innerHTML = '<p class="sub">発行済みの回数券がありません</p>'; return; }
-    el.innerHTML = tickets.map(t => {
+    const all = await apiGet();
+    const active  = all.filter(t => !isDeleted(t));
+    const deleted = all.filter(t => isDeleted(t));
+
+    if(!all.length){ el.innerHTML = '<p class="sub">発行済みの回数券がありません</p>'; return; }
+
+    const visibleTickets = showDeleted ? all : active;
+
+    let html = visibleTickets.map(t => {
       const st = statusOf(t);
       const remain = Number(t.total) - Number(t.used);
       const canUse = st === 'active' && remain > 0;
-      return `<div class="card">
+      const isDel = isDeleted(t);
+      return `<div class="card${isDel ? ' deleted' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <div><span style="font-weight:500">${t.name}</span><span class="sub" style="margin-left:8px">No.${t.member}</span></div>
           ${badgeHTML(st)}
         </div>
         <div class="sub">${t.total} session pass　残り <strong style="color:#1a1a1a">${remain}</strong> 回　/ 期限：${formatDate(t.expiry)}</div>
         ${renderDots(t.total, t.used, st)}
-        <div class="btn-row">
-          ${canUse ? `<button class="btn btn-primary btn-sm" onclick="useOne('${t.id}',${Number(t.used)},${Number(t.total)})">1回 使用済みにする</button>` : ''}
-          ${Number(t.used) > 0 ? `<button class="btn btn-sm" onclick="undoOne('${t.id}',${Number(t.used)})">1回 戻す</button>` : ''}
-          <button class="btn btn-danger btn-sm" onclick="deleteTicket('${t.id}')">削除</button>
-        </div>
+        ${isDel
+          ? `<div class="deleted-info">削除日時：${formatDateTime(t.deletedAt)}</div>`
+          : `<div class="btn-row">
+              ${canUse ? `<button class="btn btn-primary btn-sm" onclick="useOne('${t.id}',${Number(t.used)},${Number(t.total)})">1回 使用済みにする</button>` : ''}
+              ${Number(t.used) > 0 ? `<button class="btn btn-sm" onclick="undoOne('${t.id}',${Number(t.used)})">1回 戻す</button>` : ''}
+              <button class="btn btn-danger btn-sm" onclick="deleteTicket('${t.id}')">削除</button>
+            </div>`
+        }
       </div>`;
     }).join('');
+
+    // 削除済み件数の表示切替ボタン
+    if(deleted.length > 0){
+      html += `<div class="show-deleted-row">
+        <button class="show-deleted-btn" onclick="toggleDeleted()">
+          ${showDeleted ? '削除済みを隠す' : `削除済みを表示する（${deleted.length}件）`}
+        </button>
+      </div>`;
+    }
+
+    el.innerHTML = html;
   } catch(e){
     el.innerHTML = '<p class="sub">通信エラーが発生しました。</p>';
   }
+}
+
+function toggleDeleted(){
+  showDeleted = !showDeleted;
+  renderAdminList();
 }
 
 async function useOne(id, used, total){
@@ -308,7 +349,7 @@ async function undoOne(id, used){
   renderAdminList();
 }
 async function deleteTicket(id){
-  if(!confirm('この回数券を削除しますか？')) return;
+  if(!confirm('この回数券を削除しますか？\nスプレッドシートに削除記録が残ります。')) return;
   await apiPost({ action:'delete', id });
   renderAdminList();
 }
