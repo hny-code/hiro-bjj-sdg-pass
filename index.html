@@ -155,7 +155,6 @@ function show(id){
   ['s-login','s-user','s-admin'].forEach(s => document.getElementById(s).classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
-
 function setRole(r, el){
   document.querySelectorAll('#s-login .tab-bar .tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
@@ -164,7 +163,6 @@ function setRole(r, el){
   document.getElementById('login-err').textContent = '';
   document.getElementById('admin-err').textContent = '';
 }
-
 function goLogin(){
   show('s-login');
   document.getElementById('login-id').value = '';
@@ -180,34 +178,30 @@ async function apiPost(data){
   return res.json();
 }
 
-// 日本時間フォーマット
-function toJST(isoStr){
-  if(!isoStr) return null;
-  const d = new Date(isoStr);
-  if(isNaN(d)) return null;
-  return new Date(d.getTime() + 9 * 60 * 60 * 1000);
+// Apps Scriptが "2026/04/20 15:44" 形式で返すのでそのまま使う
+function dateOnly(str){
+  if(!str) return '';
+  return String(str).slice(0, 10); // "2026/04/20"
 }
-function formatDate(isoStr){
-  const d = toJST(isoStr);
-  if(!d) return '';
-  return `${d.getUTCFullYear()}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}`;
-}
-function formatDateTime(isoStr){
-  // Apps Script側で整形済みの文字列がそのまま入る場合も考慮
-  if(!isoStr) return '';
-  if(isoStr.includes(' ') && !isoStr.includes('T')) return isoStr; // 既に整形済み
-  const d = toJST(isoStr);
-  if(!d) return isoStr;
-  return `${d.getUTCFullYear()}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+function dateTime(str){
+  if(!str) return '';
+  return String(str).slice(0, 16); // "2026/04/20 15:44"
 }
 
-function daysLeft(expiry){
-  return Math.ceil((new Date(expiry) - new Date()) / (1000*60*60*24));
+// 期限切れ判定はJST文字列を直接比較
+function daysLeft(expiryStr){
+  if(!expiryStr) return 0;
+  const expiry = new Date(String(expiryStr).replace(' ', 'T') + (expiryStr.includes('T') ? '' : ':00+09:00'));
+  return Math.ceil((expiry - new Date()) / (1000*60*60*24));
 }
-function isDeleted(t){ return t.deleted === 'deleted'; }
+function isExpired(expiryStr){
+  return daysLeft(expiryStr) <= 0;
+}
+
+function isDeleted(t){ return String(t.deleted) === 'deleted'; }
 function statusOf(t){
   if(isDeleted(t)) return 'deleted';
-  if(new Date(t.expiry) < new Date()) return 'expired';
+  if(isExpired(t.expiry)) return 'expired';
   if(Number(t.used) >= Number(t.total)) return 'used';
   return 'active';
 }
@@ -232,6 +226,14 @@ function initials(name){
   if(parts.length >= 2) return parts[0][0] + parts[1][0];
   return name.slice(0,2);
 }
+function padMember(id){ return String(id).padStart(4,'0'); }
+
+// 有効期限をJSTで計算してISO文字列を返す（Apps Scriptに渡す用）
+function calcExpiry(months){
+  const now = new Date();
+  now.setMonth(now.getMonth() + months);
+  return now.toISOString();
+}
 
 async function loginUser(){
   const id = document.getElementById('login-id').value.trim();
@@ -242,7 +244,8 @@ async function loginUser(){
   document.getElementById('user-member-block').innerHTML = '';
   try {
     const all = await apiGet();
-    const tickets = all.filter(t => String(t.member) === String(id).padStart(4,'0') && !isDeleted(t));
+    const paddedId = padMember(id);
+    const tickets = all.filter(t => padMember(t.member) === paddedId && !isDeleted(t));
     if(!tickets.length){
       show('s-login');
       document.getElementById('login-err').textContent = '該当する回数券が見つかりません';
@@ -254,7 +257,7 @@ async function loginUser(){
         <div class="member-icon">${initials(name)}</div>
         <div>
           <div class="member-name">${name}</div>
-          <div class="member-no">会員番号：${String(id).padStart(4,'0')}</div>
+          <div class="member-no">会員番号：${paddedId}</div>
         </div>
       </div>`;
     renderUserCards(tickets);
@@ -283,8 +286,8 @@ function renderUserCards(tickets){
       </div>
       ${renderDots(t.total, t.used, st)}
       <div class="sub mt8">残り <strong style="color:#1a1a1a;font-size:16px">${remain}</strong> 回</div>
-      <div class="sub">有効期限：${formatDate(t.expiry)}${st==='active' ? ` （あと${dl}日）` : ''}</div>
-      <div class="sub">発行日：${formatDate(t.issued)}</div>
+      <div class="sub">有効期限：${dateOnly(t.expiry)}${st==='active' ? ` （あと${dl}日）` : ''}</div>
+      <div class="sub">発行日：${dateOnly(t.issued)}</div>
     </div>`;
   }).join('');
 }
@@ -299,7 +302,7 @@ function adminTab(tab){
 }
 
 async function loadNextMember(){
-  const hint = document.getElementById('member-hint');
+  const hint  = document.getElementById('member-hint');
   const input = document.getElementById('new-member');
   hint.textContent = '次の会員番号を取得中...';
   input.value = '';
@@ -309,7 +312,6 @@ async function loadNextMember(){
     hint.textContent = `次の会員番号：${res.member}（変更可）`;
   } catch(e){
     hint.textContent = '';
-    input.value = '';
     input.placeholder = '例：0001';
   }
 }
@@ -321,25 +323,23 @@ async function renderAdminList(){
     const all = await apiGet();
     const active  = all.filter(t => !isDeleted(t));
     const deleted = all.filter(t => isDeleted(t));
-
     if(!all.length){ el.innerHTML = '<p class="sub">発行済みの回数券がありません</p>'; return; }
 
-    const visibleTickets = showDeleted ? all : active;
-
-    let html = visibleTickets.map(t => {
+    const visible = showDeleted ? all : active;
+    let html = visible.map(t => {
       const st = statusOf(t);
       const remain = Number(t.total) - Number(t.used);
       const canUse = st === 'active' && remain > 0;
-      const isDel = isDeleted(t);
+      const isDel  = isDeleted(t);
       return `<div class="card${isDel ? ' deleted' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <div><span style="font-weight:500">${t.name}</span><span class="sub" style="margin-left:8px">No.${t.member}</span></div>
+          <div><span style="font-weight:500">${t.name}</span><span class="sub" style="margin-left:8px">No.${padMember(t.member)}</span></div>
           ${badgeHTML(st)}
         </div>
-        <div class="sub">${t.total} session pass　残り <strong style="color:#1a1a1a">${remain}</strong> 回　/ 期限：${formatDate(t.expiry)}</div>
+        <div class="sub">${t.total} session pass　残り <strong style="color:#1a1a1a">${remain}</strong> 回　/ 期限：${dateOnly(t.expiry)}</div>
         ${renderDots(t.total, t.used, st)}
         ${isDel
-          ? `<div class="deleted-info">削除日時：${formatDateTime(t.deletedAt)}</div>`
+          ? `<div class="deleted-info">削除日時：${dateTime(t.deletedAt)}</div>`
           : `<div class="btn-row">
               ${canUse ? `<button class="btn btn-primary btn-sm" onclick="useOne('${t.id}',${Number(t.used)},${Number(t.total)})">1回 使用済みにする</button>` : ''}
               ${Number(t.used) > 0 ? `<button class="btn btn-sm" onclick="undoOne('${t.id}',${Number(t.used)})">1回 戻す</button>` : ''}
@@ -356,7 +356,6 @@ async function renderAdminList(){
         </button>
       </div>`;
     }
-
     el.innerHTML = html;
   } catch(e){
     el.innerHTML = '<p class="sub">通信エラーが発生しました。</p>';
@@ -390,17 +389,15 @@ async function issueTicket(){
   const total  = parseInt(document.getElementById('new-type').value);
   const errEl  = document.getElementById('new-err');
   if(!member || !name){ errEl.textContent = '会員番号とお名前を入力してください'; return; }
-  const now = new Date();
-  const expiry = new Date(now);
-  expiry.setMonth(expiry.getMonth() + (total === 5 ? 2 : 4));
+  const expiry = calcExpiry(total === 5 ? 2 : 4);
   const id = 't' + Date.now();
   errEl.textContent = '発行中...';
   try {
-    await apiPost({ action:'add', id, member, name, total, used:0, issued:now.toISOString(), expiry:expiry.toISOString() });
+    await apiPost({ action:'add', id, member, name, total, used:0, expiry });
     document.getElementById('new-member').value = '';
     document.getElementById('new-name').value   = '';
     errEl.textContent = '';
-    alert(`発行しました。\n${name} 様\n会員番号：${member}\n${total}回券　有効期限：${formatDate(expiry)}`);
+    alert(`発行しました。\n${name} 様\n会員番号：${member}\n${total}回券`);
     adminTab('list');
   } catch(e){
     errEl.textContent = '通信エラーが発生しました。';
