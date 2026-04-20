@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HIRO BRAZILIAN JIUJITSU SENDAGI　回数券</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;background:#f5f5f3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;color:#1a1a1a}
+.wrap{max-width:480px;margin:0 auto;padding:2rem 1rem 3rem}
+
+/* ロゴ */
+.logo-block{text-align:center;margin-bottom:2rem}
+.logo-main{font-size:17px;font-weight:500;letter-spacing:0.06em;color:#1a1a1a}
+.logo-divider{width:28px;height:1px;background:#bbb;margin:8px auto}
+.logo-sub{font-size:10px;letter-spacing:0.18em;color:#888;text-transform:uppercase}
+
+/* 画面切替 */
+.screen{display:none}
+.screen.active{display:block}
+
+/* カード */
+.card{background:#fff;border:0.5px solid #e0e0e0;border-radius:12px;padding:1rem 1.25rem;margin-bottom:12px}
+
+/* タブ */
+.tab-bar{display:flex;gap:4px;margin-bottom:1.25rem}
+.tab{flex:1;padding:7px 0;border-radius:8px;border:0.5px solid #ddd;font-size:13px;cursor:pointer;background:transparent;color:#666;text-align:center}
+.tab.active{background:#1D9E75;color:#fff;border-color:#1D9E75}
+
+/* フォーム */
+label{display:block;font-size:13px;color:#666;margin-bottom:4px}
+input[type=text],input[type=password],select{
+  width:100%;padding:9px 11px;border:0.5px solid #ccc;border-radius:8px;
+  font-size:14px;background:#fff;color:#1a1a1a;margin-bottom:14px;
+  -webkit-appearance:none;appearance:none;outline:none
+}
+input:focus,select:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,117,0.12)}
+
+/* ボタン */
+.btn{display:inline-flex;align-items:center;padding:8px 20px;border:0.5px solid #ccc;border-radius:8px;background:#fff;color:#1a1a1a;font-size:14px;cursor:pointer;transition:background 0.12s}
+.btn:hover{background:#f0f0ee}
+.btn-primary{background:#1D9E75;color:#fff;border-color:#1D9E75}
+.btn-primary:hover{background:#0F6E56}
+.btn-danger{background:#E24B4A;color:#fff;border-color:#E24B4A}
+.btn-danger:hover{background:#A32D2D}
+.btn-sm{padding:5px 13px;font-size:13px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+/* バッジ */
+.badge{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500}
+.badge-active{background:#E1F5EE;color:#0F6E56}
+.badge-expired{background:#FCEBEB;color:#A32D2D}
+.badge-used{background:#f0f0ee;color:#666}
+
+/* ドット */
+.dot-row{display:flex;gap:7px;margin:12px 0;flex-wrap:wrap}
+.dot{width:34px;height:34px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;background:#f5f5f3;color:#aaa}
+.dot.used{background:#1D9E75;border-color:#1D9E75;color:#fff}
+.dot.remaining{background:#fff;border-color:#1D9E75;color:#1D9E75}
+
+/* ユーティリティ */
+.top-bar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem}
+.sub{font-size:13px;color:#888}
+.mt8{margin-top:8px}
+.err{color:#A32D2D;font-size:13px;margin-top:2px;min-height:18px}
+.hint{font-size:12px;color:#aaa;text-align:center;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ログイン -->
+<div id="s-login" class="screen active">
+  <div class="logo-block">
+    <div class="logo-main">HIRO BJJ SENDAGI</div>
+    <div class="logo-divider"></div>
+    <div class="logo-sub">session pass</div>
+  </div>
+  <div class="card">
+    <div class="tab-bar">
+      <button class="tab active" onclick="setRole('user',this)">利用者</button>
+      <button class="tab" onclick="setRole('admin',this)">管理者</button>
+    </div>
+    <div id="user-login-form">
+      <label>会員番号</label>
+      <input type="text" id="login-id" placeholder="例：1001" inputmode="numeric">
+      <div style="text-align:right"><button class="btn btn-primary" onclick="loginUser()">確認する</button></div>
+      <div id="login-err" class="err"></div>
+    </div>
+    <div id="admin-login-form" style="display:none">
+      <label>管理者パスワード</label>
+      <input type="password" id="admin-pw" placeholder="">
+      <div style="text-align:right"><button class="btn btn-primary" onclick="loginAdmin()">ログイン</button></div>
+      <div id="admin-err" class="err"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 利用者画面 -->
+<div id="s-user" class="screen">
+  <div class="top-bar">
+    <div>
+      <div style="font-size:15px;font-weight:500;letter-spacing:0.05em">HIRO BJJ SENDAGI</div>
+      <div style="font-size:10px;letter-spacing:0.15em;color:#888;text-transform:uppercase;margin-top:2px">session pass</div>
+    </div>
+    <button class="btn btn-sm" onclick="goLogin()">戻る</button>
+  </div>
+  <div id="user-cards"></div>
+</div>
+
+<!-- 管理者画面 -->
+<div id="s-admin" class="screen">
+  <div class="top-bar">
+    <div>
+      <div style="font-size:15px;font-weight:500;letter-spacing:0.05em">HIRO BJJ SENDAGI</div>
+      <div style="font-size:10px;letter-spacing:0.15em;color:#888;text-transform:uppercase;margin-top:2px">管理画面</div>
+    </div>
+    <button class="btn btn-sm" onclick="goLogin()">ログアウト</button>
+  </div>
+  <div class="tab-bar">
+    <button class="tab active" id="tab-list" onclick="adminTab('list')">券一覧</button>
+    <button class="tab" id="tab-new" onclick="adminTab('new')">新規発行</button>
+    <button class="tab" id="tab-pw" onclick="adminTab('pw')">PW変更</button>
+  </div>
+  <div id="admin-list"></div>
+  <div id="admin-new" style="display:none">
+    <div class="card">
+      <label>会員番号</label>
+      <input type="text" id="new-member" placeholder="例：1001" inputmode="numeric">
+      <label>お名前</label>
+      <input type="text" id="new-name" placeholder="例：山田 太郎">
+      <label>券種</label>
+      <select id="new-type">
+        <option value="5">5回券（有効期限 2か月）</option>
+        <option value="10">10回券（有効期限 4か月）</option>
+      </select>
+      <div style="text-align:right"><button class="btn btn-primary" onclick="issueTicket()">発行する</button></div>
+      <div id="new-err" class="err"></div>
+    </div>
+  </div>
+  <div id="admin-pw" style="display:none">
+    <div class="card">
+      <label>新しいパスワード</label>
+      <input type="password" id="new-pw1" placeholder="">
+      <label>確認</label>
+      <input type="password" id="new-pw2" placeholder="">
+      <div style="text-align:right"><button class="btn btn-primary" onclick="changePw()">変更する</button></div>
+      <div id="pw-msg" style="font-size:13px;margin-top:4px;min-height:18px"></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
+<script>
+const ADMIN_PW_KEY = 'hiro_bjj_admin_pw';
+const TICKETS_KEY  = 'hiro_bjj_tickets';
+
+function getAdminPw()  { return localStorage.getItem(ADMIN_PW_KEY) || 'sendagi2026'; }
+function getTickets()  { try { return JSON.parse(localStorage.getItem(TICKETS_KEY) || '[]'); } catch { return []; } }
+function saveTickets(t){ localStorage.setItem(TICKETS_KEY, JSON.stringify(t)); }
+
+function show(id){
+  ['s-login','s-user','s-admin'].forEach(s => document.getElementById(s).classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function setRole(r, el){
+  document.querySelectorAll('#s-login .tab-bar .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('user-login-form').style.display = r === 'user' ? 'block' : 'none';
+  document.getElementById('admin-login-form').style.display = r === 'admin' ? 'block' : 'none';
+  document.getElementById('login-err').textContent = '';
+  document.getElementById('admin-err').textContent = '';
+}
+
+function goLogin(){
+  show('s-login');
+  document.getElementById('login-id').value = '';
+  document.getElementById('admin-pw').value = '';
+}
+
+function loginUser(){
+  const id = document.getElementById('login-id').value.trim();
+  if(!id){ document.getElementById('login-err').textContent = '会員番号を入力してください'; return; }
+  const tickets = getTickets().filter(t => t.member === id);
+  if(!tickets.length){ document.getElementById('login-err').textContent = '該当する回数券が見つかりません'; return; }
+  renderUserCards(tickets);
+  show('s-user');
+}
+
+function loginAdmin(){
+  const pw = document.getElementById('admin-pw').value;
+  if(pw !== getAdminPw()){ document.getElementById('admin-err').textContent = 'パスワードが違います'; return; }
+  adminTab('list');
+  show('s-admin');
+}
+
+function daysLeft(expiry){ return Math.ceil((new Date(expiry) - new Date()) / (1000*60*60*24)); }
+
+function formatDate(d){
+  const dt = new Date(d);
+  return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+}
+
+function statusOf(t){
+  if(new Date(t.expiry) < new Date()) return 'expired';
+  if(t.used >= t.total) return 'used';
+  return 'active';
+}
+
+function renderDots(total, used, status){
+  let html = '<div class="dot-row">';
+  for(let i = 0; i < total; i++){
+    if(i < used)              html += '<div class="dot used">✓</div>';
+    else if(status === 'active') html += `<div class="dot remaining">${i+1}</div>`;
+    else                      html += `<div class="dot">${i+1}</div>`;
+  }
+  return html + '</div>';
+}
+
+function badgeHTML(st){
+  if(st === 'active')  return '<span class="badge badge-active">有効</span>';
+  if(st === 'expired') return '<span class="badge badge-expired">期限切れ</span>';
+  return '<span class="badge badge-used">使い切り</span>';
+}
+
+function renderUserCards(tickets){
+  const el = document.getElementById('user-cards');
+  el.innerHTML = tickets.map(t => {
+    const st = statusOf(t);
+    const remain = t.total - t.used;
+    const dl = daysLeft(t.expiry);
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-weight:500">${t.total} session pass</span>${badgeHTML(st)}
+      </div>
+      ${renderDots(t.total, t.used, st)}
+      <div class="sub mt8">残り <strong style="color:#1a1a1a;font-size:16px">${remain}</strong> 回</div>
+      <div class="sub">有効期限：${formatDate(t.expiry)}${st==='active' ? ` （あと${dl}日）` : ''}</div>
+      <div class="sub">発行日：${formatDate(t.issued)}</div>
+    </div>`;
+  }).join('');
+}
+
+function adminTab(tab){
+  ['list','new','pw'].forEach(t => {
+    document.getElementById('admin-'+t).style.display = t === tab ? 'block' : 'none';
+    document.getElementById('tab-'+t).classList.toggle('active', t === tab);
+  });
+  if(tab === 'list') renderAdminList();
+}
+
+function renderAdminList(){
+  const tickets = getTickets();
+  const el = document.getElementById('admin-list');
+  if(!tickets.length){ el.innerHTML = '<p class="sub">発行済みの回数券がありません</p>'; return; }
+  el.innerHTML = tickets.map((t, i) => {
+    const st = statusOf(t);
+    const remain = t.total - t.used;
+    const canUse = st === 'active' && remain > 0;
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div><span style="font-weight:500">${t.name}</span><span class="sub" style="margin-left:8px">No.${t.member}</span></div>
+        ${badgeHTML(st)}
+      </div>
+      <div class="sub">${t.total} session pass　残り <strong style="color:#1a1a1a">${remain}</strong> 回　/ 期限：${formatDate(t.expiry)}</div>
+      ${renderDots(t.total, t.used, st)}
+      <div class="btn-row">
+        ${canUse ? `<button class="btn btn-primary btn-sm" onclick="useOne(${i})">1回 使用済みにする</button>` : ''}
+        ${t.used > 0 ? `<button class="btn btn-sm" onclick="undoOne(${i})">1回 戻す</button>` : ''}
+        <button class="btn btn-danger btn-sm" onclick="deleteTicket(${i})">削除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function useOne(i){
+  const t = getTickets();
+  if(t[i].used < t[i].total) t[i].used++;
+  saveTickets(t); renderAdminList();
+}
+function undoOne(i){
+  const t = getTickets();
+  if(t[i].used > 0) t[i].used--;
+  saveTickets(t); renderAdminList();
+}
+function deleteTicket(i){
+  if(!confirm('この回数券を削除しますか？')) return;
+  const t = getTickets(); t.splice(i, 1); saveTickets(t); renderAdminList();
+}
+
+function issueTicket(){
+  const member = document.getElementById('new-member').value.trim();
+  const name   = document.getElementById('new-name').value.trim();
+  const total  = parseInt(document.getElementById('new-type').value);
+  if(!member || !name){ document.getElementById('new-err').textContent = '会員番号とお名前を入力してください'; return; }
+  const now = new Date();
+  const expiry = new Date(now);
+  expiry.setMonth(expiry.getMonth() + (total === 5 ? 2 : 4));
+  const tickets = getTickets();
+  tickets.push({ member, name, total, used: 0, issued: now.toISOString(), expiry: expiry.toISOString() });
+  saveTickets(tickets);
+  document.getElementById('new-member').value = '';
+  document.getElementById('new-name').value   = '';
+  document.getElementById('new-err').textContent = '';
+  alert(`発行しました。\n${name} 様\n${total}回券　有効期限：${formatDate(expiry)}`);
+  adminTab('list');
+}
+
+function changePw(){
+  const p1  = document.getElementById('new-pw1').value;
+  const p2  = document.getElementById('new-pw2').value;
+  const msg = document.getElementById('pw-msg');
+  if(!p1){ msg.textContent = 'パスワードを入力してください'; msg.style.color = '#A32D2D'; return; }
+  if(p1 !== p2){ msg.textContent = 'パスワードが一致しません'; msg.style.color = '#A32D2D'; return; }
+  localStorage.setItem(ADMIN_PW_KEY, p1);
+  msg.textContent = '変更しました'; msg.style.color = '#0F6E56';
+  document.getElementById('new-pw1').value = '';
+  document.getElementById('new-pw2').value = '';
+}
+
+// Enterキー対応
+document.getElementById('login-id').addEventListener('keydown', e => { if(e.key === 'Enter') loginUser(); });
+document.getElementById('admin-pw').addEventListener('keydown', e => { if(e.key === 'Enter') loginAdmin(); });
+</script>
+</body>
+</html>
