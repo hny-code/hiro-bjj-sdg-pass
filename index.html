@@ -6,7 +6,8 @@
 <title>HIRO BRAZILIAN JIUJITSU SENDAGI　回数券</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{min-height:100%;background:#f5f5f3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;color:#1a1a1a}
+html{height:100%}
+body{min-height:100%;background:#f5f5f3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;color:#1a1a1a;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .wrap{max-width:480px;margin:0 auto;padding:2rem 1rem 3rem}
 .logo-block{text-align:center;margin-bottom:2rem}
 .logo-main{font-size:17px;font-weight:500;letter-spacing:0.06em;color:#1a1a1a}
@@ -154,6 +155,7 @@ function getAdminPw(){ return localStorage.getItem(ADMIN_PW_KEY) || 'sendagi2026
 function show(id){
   ['s-login','s-user','s-admin'].forEach(s => document.getElementById(s).classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
 }
 function setRole(r, el){
   document.querySelectorAll('#s-login .tab-bar .tab').forEach(t => t.classList.remove('active'));
@@ -178,26 +180,21 @@ async function apiPost(data){
   return res.json();
 }
 
-// Apps Scriptが "2026/04/20 15:44" 形式で返すのでそのまま使う
 function dateOnly(str){
   if(!str) return '';
-  return String(str).slice(0, 10); // "2026/04/20"
+  return String(str).slice(0, 10);
 }
 function dateTime(str){
   if(!str) return '';
-  return String(str).slice(0, 16); // "2026/04/20 15:44"
+  return String(str).slice(0, 16);
 }
-
-// 期限切れ判定はJST文字列を直接比較
 function daysLeft(expiryStr){
   if(!expiryStr) return 0;
-  const expiry = new Date(String(expiryStr).replace(' ', 'T') + (expiryStr.includes('T') ? '' : ':00+09:00'));
+  const s = String(expiryStr).replace(' ', 'T');
+  const expiry = new Date(s.includes('+') ? s : s + '+09:00');
   return Math.ceil((expiry - new Date()) / (1000*60*60*24));
 }
-function isExpired(expiryStr){
-  return daysLeft(expiryStr) <= 0;
-}
-
+function isExpired(expiryStr){ return daysLeft(expiryStr) <= 0; }
 function isDeleted(t){ return String(t.deleted) === 'deleted'; }
 function statusOf(t){
   if(isDeleted(t)) return 'deleted';
@@ -227,8 +224,6 @@ function initials(name){
   return name.slice(0,2);
 }
 function padMember(id){ return String(id).padStart(4,'0'); }
-
-// 有効期限をJSTで計算してISO文字列を返す（Apps Scriptに渡す用）
 function calcExpiry(months){
   const now = new Date();
   now.setMonth(now.getMonth() + months);
