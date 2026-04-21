@@ -152,7 +152,7 @@ const ADMIN_SESSION   = 'hiro_bjj_admin_session';
 let showDeleted = false;
 
 function getAdminPw(){ return localStorage.getItem(ADMIN_PW_KEY) || 'sendagi2026'; }
-function isAdminLoggedIn(){ return sessionStorage.getItem(ADMIN_SESSION) === 'true'; }
+function isAdminLoggedIn(){ return localStorage.getItem(ADMIN_SESSION) === 'true'; }
 
 // ページ読み込み時に管理者セッションを復元
 window.addEventListener('load', () => {
@@ -182,7 +182,7 @@ function goLogin(){
   document.getElementById('admin-pw').value = '';
 }
 function logout(){
-  sessionStorage.removeItem(ADMIN_SESSION);
+  localStorage.removeItem(ADMIN_SESSION);
   goLogin();
 }
 
@@ -279,7 +279,7 @@ async function loginUser(){
 function loginAdmin(){
   const pw = document.getElementById('admin-pw').value;
   if(pw !== getAdminPw()){ document.getElementById('admin-err').textContent = 'パスワードが違います'; return; }
-  sessionStorage.setItem(ADMIN_SESSION, 'true');
+  localStorage.setItem(ADMIN_SESSION, 'true');
   showDeleted = false;
   adminTab('list');
   showScreen('s-admin');
