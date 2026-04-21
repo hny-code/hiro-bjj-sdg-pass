@@ -107,7 +107,7 @@ input:focus,select:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,1
       <div style="font-size:15px;font-weight:500;letter-spacing:0.05em">HIRO BJJ SENDAGI</div>
       <div style="font-size:10px;letter-spacing:0.15em;color:#888;text-transform:uppercase;margin-top:2px">管理画面</div>
     </div>
-    <button class="btn btn-sm" onclick="goLogin()">ログアウト</button>
+    <button class="btn btn-sm" onclick="logout()">ログアウト</button>
   </div>
   <div class="tab-bar">
     <button class="tab active" id="tab-list" onclick="adminTab('list')">券一覧</button>
@@ -147,12 +147,23 @@ input:focus,select:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,1
 
 <script>
 const API = 'https://script.google.com/macros/s/AKfycbxs9BHXlC73c3SzX0xeC5xqrSLcaSqGfFPFY-TcNtmZFMJ_NM8cAm0V7LZKFFgFdYrtVA/exec';
-const ADMIN_PW_KEY = 'hiro_bjj_admin_pw';
+const ADMIN_PW_KEY    = 'hiro_bjj_admin_pw';
+const ADMIN_SESSION   = 'hiro_bjj_admin_session';
 let showDeleted = false;
 
 function getAdminPw(){ return localStorage.getItem(ADMIN_PW_KEY) || 'sendagi2026'; }
+function isAdminLoggedIn(){ return sessionStorage.getItem(ADMIN_SESSION) === 'true'; }
 
-function show(id){
+// ページ読み込み時に管理者セッションを復元
+window.addEventListener('load', () => {
+  if(isAdminLoggedIn()){
+    showDeleted = false;
+    adminTab('list');
+    showScreen('s-admin');
+  }
+});
+
+function showScreen(id){
   ['s-login','s-user','s-admin'].forEach(s => document.getElementById(s).classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
@@ -166,9 +177,13 @@ function setRole(r, el){
   document.getElementById('admin-err').textContent = '';
 }
 function goLogin(){
-  show('s-login');
+  showScreen('s-login');
   document.getElementById('login-id').value = '';
   document.getElementById('admin-pw').value = '';
+}
+function logout(){
+  sessionStorage.removeItem(ADMIN_SESSION);
+  goLogin();
 }
 
 async function apiGet(){
@@ -234,7 +249,7 @@ async function loginUser(){
   const id = document.getElementById('login-id').value.trim();
   if(!id){ document.getElementById('login-err').textContent = '会員番号を入力してください'; return; }
   const el = document.getElementById('user-cards');
-  show('s-user');
+  showScreen('s-user');
   el.innerHTML = loadingHTML();
   document.getElementById('user-member-block').innerHTML = '';
   try {
@@ -242,7 +257,7 @@ async function loginUser(){
     const paddedId = padMember(id);
     const tickets = all.filter(t => padMember(t.member) === paddedId && !isDeleted(t));
     if(!tickets.length){
-      show('s-login');
+      showScreen('s-login');
       document.getElementById('login-err').textContent = '該当する回数券が見つかりません';
       return;
     }
@@ -264,9 +279,10 @@ async function loginUser(){
 function loginAdmin(){
   const pw = document.getElementById('admin-pw').value;
   if(pw !== getAdminPw()){ document.getElementById('admin-err').textContent = 'パスワードが違います'; return; }
+  sessionStorage.setItem(ADMIN_SESSION, 'true');
   showDeleted = false;
   adminTab('list');
-  show('s-admin');
+  showScreen('s-admin');
 }
 
 function renderUserCards(tickets){
